@@ -27,7 +27,7 @@ K_SIZE = 3  # Aperture parameter for the Sobel operator
 K = 0.04  # Harris detector free parameter
 THRESHOLD = 0.01
 
-
+# TODO
 def birds_eye_view(frames):
     return np.zeros((1, 1))
 
@@ -55,8 +55,14 @@ def detect_corners(frame):
     return corners
 
 
+# TODO
 def fit_court(corners):
-    return (0, 0, 0)
+    return 0, 0, 0
+
+
+# TODO
+def estimate_location(x, y, angle):
+    return x, y
 
 
 def main():
@@ -92,15 +98,18 @@ def main():
         # Stitch frame into birds eye image
         frame = birds_eye_view(frames)
 
+        # Extract corners from birds eye image
         corners = detect_corners(frame)
 
-        """
-        left = np.vstack((frames[0],frames[1]))
-        right = np.vstack((frames[2],frames[3]))
-        frame = np.hstack((left,right)) 
-        frame = cv.resize(frame,(1920,1080))
-        cv.imshow('frame', frame)
-        """
+        # Estimate location of tennis court in the frame using corners
+        x, y, angle = fit_court(corners)
+
+        # Using location of court - calculate location of robot
+        estimate_location(x, y, angle)
+
+        # TODO
+        # Ideally output visualisation of tennis court with position estimate on it
+        # Side by side with birds eye view
 
         if cv.waitKey(1) == ord('q'):
             break
