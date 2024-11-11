@@ -135,9 +135,7 @@ def create_tiled_frame(original_frames, birds_eye, template_match, scale_factor=
 def create_visualization(north_path, east_path, south_path, west_path,
                          birds_eye_path, template_match_path, output_path,
                          scale_factor=0.5):
-    """
-    Create a combined visualization video from the input videos.
-    """
+
     # Verify all input files exist
     input_paths = [north_path, east_path, south_path, west_path,
                    birds_eye_path, template_match_path]
@@ -237,14 +235,14 @@ def create_visualization(north_path, east_path, south_path, west_path,
         cv2.destroyAllWindows()
 
 if __name__ == "__main__":
-    # Example paths - replace these with your actual video paths
-    north_path = "vid_north.mkv"
-    east_path = "vid_east.mkv"
-    south_path = "vid_south.mkv"
-    west_path = "vid_west.mkv"
+
+    north_path = "img/vid_north.mkv"
+    east_path = "img/vid_east.mkv"
+    south_path = "img/vid_south.mkv"
+    west_path = "img/vid_west.mkv"
     birds_eye_path = "output/stitchedvid__color.mp4"
     template_match_path = "output/corners_detected1.mp4"
-    output_path = "combined_visualization1.mp4"
+    output_path = "output/combined_visualization1.mp4"
 
     try:
         create_visualization(

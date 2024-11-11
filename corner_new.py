@@ -49,14 +49,7 @@ def filter_nearby_points(points, threshold=10):
 
 def process_video(binary_video_path, color_video_path, output_path, block_size=8, ksize=5, k=0.04,
                   threshold=0.01, filter_threshold=20):
-    """
-    Process video files and detect corners
 
-    Parameters:
-    - binary_video_path: path to binary/grayscale video for corner detection
-    - color_video_path: path to color video for output
-    - output_path: path for output video
-    """
     # Open video captures
     binary_cap = cv.VideoCapture(binary_video_path)
     color_cap = cv.VideoCapture(color_video_path)
@@ -123,7 +116,6 @@ def process_video(binary_video_path, color_video_path, output_path, block_size=8
     print(f"Video processing complete. Output saved to {output_path}")
 
 
-# Example usage
 if __name__ == "__main__":
     binary_video = "output/stitchedvid__binary.mp4"
     color_video = "output/stitchedvid__color.mp4"

@@ -293,7 +293,6 @@ def process_inputs(north_source: str, east_source: str, south_source: str, west_
         cv2.destroyAllWindows()
 
 
-# Example usage - just modify these source paths
 north_source = 'output_quarters/cnorth.jpg'  # or .mp4
 east_source = 'output_quarters/ceast.jpg'  # or .mp4
 south_source = 'output_quarters/csouth.jpg'  # or .mp4
