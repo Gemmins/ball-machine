@@ -15,6 +15,7 @@ def apply_deadzone(value, deadzone):
         return 0
     return value
 
+
 def main():
     pygame.init()
     pygame.joystick.init()
@@ -26,17 +27,10 @@ def main():
     controller = pygame.joystick.Joystick(0)
     controller.init()
 
-    if "" not in controller.get_name():
-        print("This script is designed for DualShock 4 controllers.")
-        print(f"Connected controller: {controller.get_name()}")
-        return
-
     ser = serial.Serial('COM6', 115200, timeout=1)
     time.sleep(2)  # Allow time for the serial connection to establish
 
-    print("DualShock 4 controller connected. Press Ctrl+C to exit.")
-
-    last_motor_direction = 0  # 0 for forward, 1 for backward
+    last_motor_direction = 0
 
     try:
         while True:
@@ -44,38 +38,39 @@ def main():
 
             # Right stick for stepper motor
             x_axis_right = apply_deadzone(controller.get_axis(2), DEADZONE)
-            y_axis_right = apply_deadzone(controller.get_axis(3), DEADZONE)
 
             # Left stick for PWM motors
-            y_axis_left = apply_deadzone(controller.get_axis(1), DEADZONE)  # Forward/Backward axis
+            y_axis_left = apply_deadzone(controller.get_axis(1), DEADZONE)
 
-            # Calculate stepper motor rate
-            magnitude = math.sqrt(x_axis_right**2 + y_axis_right**2)
-            angle = math.degrees(math.atan2(y_axis_right, x_axis_right))
-            speed = int(magnitude * 100)
-            direction = 1 if -90 <= angle <= 90 else -1
-            stepper_rate = direction * speed
+            stepper_rate = int(x_axis_right * 100)
 
             # Calculate PWM values for left and right motors
-            pwm_value = int(abs(y_axis_left) * 100)
+            pwm_value = int(abs(y_axis_left) * 50)
 
-            # Determine motor direction, maintaining previous direction in deadzone
+            # Determine motor direction
             if y_axis_left < -DEADZONE:
-                motor_direction = 0  # Forward
+                motor_direction = 0
                 last_motor_direction = 0
             elif y_axis_left > DEADZONE:
-                motor_direction = 1  # Backward
+                motor_direction = 1
                 last_motor_direction = 1
             else:
                 motor_direction = last_motor_direction
 
-            # Prepare data string to send
+            # Send data to Pico
             data = f"{stepper_rate},{pwm_value},{motor_direction}\n"
             ser.write(data.encode())
+            print(f"Sent: {data.strip()}")
 
-            print(f"Stepper rate: {stepper_rate}, PWM: {pwm_value}, Direction: {'Backward' if motor_direction else 'Forward'}")
+            # Read acknowledgment from Pico
+            response = ser.readline().decode().strip()
+            if response:
+                if response == "ACK":
+                    print("Pico ACK")
+                elif response == "ERR":
+                    print("Pico Error")
 
-            time.sleep(0.1)  # Small delay to reduce output frequency
+            time.sleep(0.001)
 
     except KeyboardInterrupt:
         print("\nExiting...")
@@ -83,6 +78,7 @@ def main():
     finally:
         ser.close()
         pygame.quit()
+
 
 if __name__ == "__main__":
     main()
