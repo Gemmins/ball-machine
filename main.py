@@ -1,11 +1,11 @@
 """
 Vision steps:
 - read in video from each of the 4 camera streams
-- undistort the image using the precomputed matrix and cv.remap
+- undistort the image using the precomputed matrix and cv.remap()
 - perform a perspective transform and stitch the images to get a birds-eye representation
 - (could possibly combine the undistortion matrix?)
-- blur image and locate corners
-- using the location of corners, find the best location of the tennis court
+- blur image and extract lines
+- using the location of lines, find the best location of the tennis court
 - calculate location of the robot relative to the tennis court
 """
 import os
@@ -27,32 +27,20 @@ K_SIZE = 3  # Aperture parameter for the Sobel operator
 K = 0.04  # Harris detector free parameter
 THRESHOLD = 0.01
 
+
 # TODO
+# Transform images to birds-eye perspective
+# Then stitch images to get full picture
+# Can probably do this buy hand as feature detection for stitching may take too long
+# And the cameras dont change position relative to each other
 def birds_eye_view(frames):
     return np.zeros((1, 1))
 
 
-def detect_corners(frame):
-    # implementation copied from https://docs.opencv.org/4.x/dc/d0d/tutorial_py_features_harris.html
-
-    frame = cv.cvtColor(frame, cv.COLOR_BGR2GRAY)
-    frame = cv.GaussianBlur(frame, KERNEL_SIZE, SIGMA_X)
-
-    frame = np.float32(frame)
-    dst = cv.cornerHarris(frame, BLOCK_SIZE, K_SIZE, K)
-
-    dst = cv.dilate(dst, None)
-    ret, dst = cv.threshold(dst, THRESHOLD * dst.max(), 255, 0)
-    dst = np.uint8(dst)
-
-    # find centroids
-    ret, labels, stats, centroids = cv.connectedComponentsWithStats(dst)
-
-    # define the criteria to stop and refine the corners
-    criteria = (cv.TERM_CRITERIA_EPS + cv.TERM_CRITERIA_MAX_ITER, 100, 0.001)
-    corners = cv.cornerSubPix(frame, np.float32(centroids), (5, 5), (-1, -1), criteria)
-
-    return corners
+# TODO
+def detect_lines(frame):
+    lines = []
+    return lines
 
 
 # TODO
@@ -99,7 +87,7 @@ def main():
         frame = birds_eye_view(frames)
 
         # Extract corners from birds eye image
-        corners = detect_corners(frame)
+        corners = detect_lines(frame)
 
         # Estimate location of tennis court in the frame using corners
         x, y, angle = fit_court(corners)
