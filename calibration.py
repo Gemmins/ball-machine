@@ -31,15 +31,13 @@ while True:
     ret, corners = cv.findChessboardCorners(gray, (8, 7), None)
 
     # If found, add object points, image points (after refining them)
-    # Only check every 5th frame
+    # Only check every 10th frame
     if ret and j % 10 == 0:
 
         corners2 = cv.cornerSubPix(gray, corners, (11, 11), (-1, -1), criteria)
 
         imgpoints.append(corners2)
         objpoints.append(objp)
-        if i == 0:
-            print(imgpoints)
 
         i += 1
 
@@ -58,17 +56,18 @@ while True:
 
 cam.release()
 cv.destroyAllWindows()
-print("calibrating camera")
+
+# flag use lu speeds up the calibration massively - not sure how much it affects accuracy tho
 ret, mtx, dist, rvecs, tvecs = cv.calibrateCamera(objpoints, imgpoints, gray.shape[::-1], None,
                                                   None, flags=cv.CALIB_USE_LU)
 
+print("finished calibrating camera")
+
 img = cv.imread(f'images/{name}.jpg')
 h, w = img.shape[:2]
-print("getting optimal camera matrix")
 newcameramtx, roi = cv.getOptimalNewCameraMatrix(mtx, dist, (w, h), 0, (w, h))
 
 # undistort
-print("undistort rectify map")
 mapx, mapy = cv.initUndistortRectifyMap(mtx, dist, None, newcameramtx, (w, h), 5)
 
 np.savez(f"matrices/{name}", mapx=mapx, mapy=mapy)
