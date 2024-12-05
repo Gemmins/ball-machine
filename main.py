@@ -60,64 +60,11 @@ def get_transform_matrix():
 
     return matrix
 
-
-# TODO
 # Transform images to birds-eye perspective
 # Then stitch images to get full picture
-# Can probably do this buy hand as feature detection for stitching may take too long
-# And the cameras dont change position relative to each other
-def get_and_visualize_matches(img1, img2, title="Matches"):
-    """Get keypoints with tuned parameters for better matching"""
-    # Create SIFT with adjusted parameters
-    sift = cv.SIFT.create(
-        nfeatures=0,  # More features
-        nOctaveLayers=5,  # More layers
-        contrastThreshold=0.02,  # Lower for more features
-        edgeThreshold=10  # Increased edge threshold
-    )
-
-    # Detect keypoints and compute descriptors
-    kp1, desc1 = sift.detectAndCompute(img1, None)
-    kp2, desc2 = sift.detectAndCompute(img2, None)
-
-    # Use BFMatcher for more accurate (but slower) matching
-    matcher = cv.BFMatcher(cv.NORM_L2)
-    matches = matcher.knnMatch(desc1, desc2, k=2)
-
-    # More strict ratio test
-    good_matches = []
-    for m, n in matches:
-        if m.distance < 0.6 * n.distance:  # Stricter ratio
-            good_matches.append(m)
-
-    # Sort matches by distance
-    good_matches = sorted(good_matches, key=lambda x: x.distance)
-
-    # Take only the best matches
-    good_matches = good_matches[:50]
-
-    img_matches = cv.drawMatches(img1, kp1, img2, kp2, good_matches, None,
-                                 matchColor=(0, 255, 0),
-                                 singlePointColor=(255, 0, 0),
-                                 flags=cv.DrawMatchesFlags_NOT_DRAW_SINGLE_POINTS)
-
-    cv.imshow(title, cv.resize(img_matches, (1280, 720)))
-    cv.waitKey(0)
-
-    return kp1, kp2, good_matches
-
-
-def crop_to_content(img, pad=50):
-    """Crop image to content plus padding"""
-    y_nonzero, x_nonzero = np.nonzero(img.any(axis=2))
-    if len(y_nonzero) == 0 or len(x_nonzero) == 0:
-        return img
-    y_min, y_max = y_nonzero.min(), y_nonzero.max()
-    x_min, x_max = x_nonzero.min(), x_nonzero.max()
-    h, w = img.shape[:2]
-    return img[max(0, y_min - pad):min(h, y_max + pad),
-           max(0, x_min - pad):min(w, x_max + pad)]
-
+# This will be done using feature matching once
+# The homography generated from this matching will then be used for all subsequent images
+# This is to allow for 'real-time' processing
 
 # We should build up the image in a loop
 # We get the matching key points between the current + new image
@@ -250,7 +197,7 @@ def main():
         # I think I might eventually use multiprocessing to get better sync but im not sure
         for camera in cameras:
             camera.grab()
-
+        # altered for testing with individual image
         #frames = [camera.retrieve()[1] for camera in cameras]
         for i in range(1, 5):
             frames.append(cv.imread(f'images/cam{i}.jpg'))
