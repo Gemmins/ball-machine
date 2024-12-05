@@ -9,6 +9,8 @@ Vision steps:
 - calculate location of the robot relative to the tennis court
 """
 import os
+from idlelib.pyparse import trans
+
 import numpy as np
 import cv2 as cv
 
@@ -22,15 +24,16 @@ SIGMA_X = 1  # Sigma
 
 # Perspective transform
 VERTICAL_CROP = 1 / 2  # What portion of the vertical resolution of the images to use
-ANGLE = 90  # Angle of the cameras from the ground plane
-SCALE = 1  # Scale of output of perspective transform image
+ANGLE = 25.5  # Angle of the cameras from the ground plane
+# SCALE = 1  # Scale of output of perspective transform image
 IMAGE_WIDTH = 1280  # resolution of cameras - all should be the same
 IMAGE_HEIGHT = 720
 
-SCALED_WIDTH = int(IMAGE_WIDTH * SCALE)  # Save recalculating every frame
-SCALED_HEIGHT = int(IMAGE_HEIGHT * SCALE)
 
-FIT_SCALE = 0.9  # This is just to tune the fitting of the images together
+# SCALED_WIDTH = int(IMAGE_WIDTH * SCALE)  # Save recalculating every frame
+# SCALED_HEIGHT = int(IMAGE_HEIGHT * SCALE)
+
+# FIT_SCALE = 1  # This is just to tune the fitting of the images together
 
 
 def get_transform_matrix():
@@ -38,21 +41,20 @@ def get_transform_matrix():
     image_height = IMAGE_HEIGHT
 
     centre_x = image_width / 2
-
-    #expansion = 1 / np.cos(np.deg2rad(90-ANGLE))
-    expansion = 1.6
+    expansion = 1 / np.cos(np.deg2rad(90 - ANGLE))
     bottom_width = image_width * expansion
+    bottom_offset = image_height * (1 - VERTICAL_CROP)
 
-    src_points = np.float32([[0, image_height * (1-VERTICAL_CROP)],
-                             [image_width, image_height * (1-VERTICAL_CROP)],
-                             [centre_x - bottom_width, image_height],
-                             [centre_x + bottom_width, image_height]])
+    src_points = np.float32([[0, bottom_offset],
+                             [image_width, bottom_offset],
+                             [centre_x - (bottom_width / 2), image_height],
+                             [centre_x + (bottom_width / 2), image_height]])
 
     # should probs use smaller resolution than source image
-    dest_points = np.float32([[0, 0],
-                              [image_width * SCALE, 0],
-                              [0, image_height * SCALE],
-                              [image_width * SCALE, image_height * SCALE]])
+    dest_points = np.float32([[0, bottom_offset],
+                              [image_width, bottom_offset],
+                              [0, image_height],
+                              [image_width, image_height]])
 
     matrix = cv.getPerspectiveTransform(src_points, dest_points)
 
@@ -64,22 +66,146 @@ def get_transform_matrix():
 # Then stitch images to get full picture
 # Can probably do this buy hand as feature detection for stitching may take too long
 # And the cameras dont change position relative to each other
-def birds_eye_view(frames, matrix):
-    frames = [cv.warpPerspective(frame, matrix, (SCALED_WIDTH, SCALED_HEIGHT)) for frame in frames]
+def get_and_visualize_matches(img1, img2, title="Matches"):
+    """Get keypoints with tuned parameters for better matching"""
+    # Create SIFT with adjusted parameters
+    sift = cv.SIFT.create(
+        nfeatures=0,  # More features
+        nOctaveLayers=5,  # More layers
+        contrastThreshold=0.02,  # Lower for more features
+        edgeThreshold=10  # Increased edge threshold
+    )
 
-    new_height = int(SCALED_HEIGHT * FIT_SCALE)
-    frames = [cv.resize(frame, (SCALED_WIDTH, new_height)) for frame in frames]
+    # Detect keypoints and compute descriptors
+    kp1, desc1 = sift.detectAndCompute(img1, None)
+    kp2, desc2 = sift.detectAndCompute(img2, None)
 
-    # Rotate to fit
-    frames[1] = cv.rotate(frames[1], cv.ROTATE_90_COUNTERCLOCKWISE)
-    frames[2] = cv.rotate(frames[2], cv.ROTATE_180)
-    frames[3] = cv.rotate(frames[3], cv.ROTATE_90_CLOCKWISE)
+    # Use BFMatcher for more accurate (but slower) matching
+    matcher = cv.BFMatcher(cv.NORM_L2)
+    matches = matcher.knnMatch(desc1, desc2, k=2)
 
-    for i, frame in enumerate(frames):
-        cv.imwrite(f'output/transformed-{i}.png', frame)
+    # More strict ratio test
+    good_matches = []
+    for m, n in matches:
+        if m.distance < 0.6 * n.distance:  # Stricter ratio
+            good_matches.append(m)
 
-    return 1
+    # Sort matches by distance
+    good_matches = sorted(good_matches, key=lambda x: x.distance)
 
+    # Take only the best matches
+    good_matches = good_matches[:50]
+
+    img_matches = cv.drawMatches(img1, kp1, img2, kp2, good_matches, None,
+                                 matchColor=(0, 255, 0),
+                                 singlePointColor=(255, 0, 0),
+                                 flags=cv.DrawMatchesFlags_NOT_DRAW_SINGLE_POINTS)
+
+    cv.imshow(title, cv.resize(img_matches, (1280, 720)))
+    cv.waitKey(0)
+
+    return kp1, kp2, good_matches
+
+
+def crop_to_content(img, pad=50):
+    """Crop image to content plus padding"""
+    y_nonzero, x_nonzero = np.nonzero(img.any(axis=2))
+    if len(y_nonzero) == 0 or len(x_nonzero) == 0:
+        return img
+    y_min, y_max = y_nonzero.min(), y_nonzero.max()
+    x_min, x_max = x_nonzero.min(), x_nonzero.max()
+    h, w = img.shape[:2]
+    return img[max(0, y_min - pad):min(h, y_max + pad),
+           max(0, x_min - pad):min(w, x_max + pad)]
+
+
+# We should build up the image in a loop
+# We get the matching key points between the current + new image
+# We then transform the new image onto the current
+# This then repeats with the next image
+
+def birds_eye_view(frames):
+    matrix = get_transform_matrix()
+    transformed = [cv.warpPerspective(frame, matrix, (IMAGE_WIDTH, IMAGE_HEIGHT))
+                   for frame in frames]
+
+    transformed[2] = cv.rotate(transformed[2], cv.ROTATE_180)
+    transformed[1] = cv.rotate(transformed[1], cv.ROTATE_90_COUNTERCLOCKWISE)
+    transformed[3] = cv.rotate(transformed[3], cv.ROTATE_90_CLOCKWISE)
+
+    sift = cv.SIFT.create(
+        nfeatures=0,  # More features
+        nOctaveLayers=5,  # More layers
+        contrastThreshold=0.02,  # Lower for more features
+        edgeThreshold=10  # Increased edge threshold
+    )
+
+    # Create large canvas and place first image 1/4 down
+    canvas_size = (IMAGE_WIDTH * 6, IMAGE_HEIGHT * 6)
+    result = np.zeros((canvas_size[1], canvas_size[0], 3), dtype=np.uint8)
+    x_offset = (canvas_size[0] - IMAGE_WIDTH) // 2
+    y_offset = canvas_size[1] // 2
+    result[y_offset:y_offset + IMAGE_HEIGHT,
+    x_offset:x_offset + IMAGE_WIDTH] = transformed[2]
+    current = result
+
+    # This is just the order I want to do the test images in
+    # but it could work in the default order
+    order = [3, 1, 0]
+
+    for i in order:
+        new = transformed[i]
+
+        # detect key points
+        kp_current, desc_current = sift.detectAndCompute(current, None)
+        kp_new, desc_new = sift.detectAndCompute(new, None)
+
+        # Use BFMatcher for more accurate (but slower) matching
+        matcher = cv.BFMatcher(cv.NORM_L2)
+        matches = matcher.knnMatch(desc_current, desc_new, k=2)
+
+        # Lowe's ratio test
+        good_matches = []
+        for m, n in matches:
+            if m.distance < 0.6 * n.distance:  # Stricter ratio
+                good_matches.append(m)
+
+        # Sort matches by distance
+        good_matches = sorted(good_matches, key=lambda x: x.distance)
+
+        # Take only the best matches
+        good_matches = good_matches[:50]
+
+        # This bit is only needed when you want to see the output of the matching
+        #########################################################################
+        #img_matches = cv.drawMatches(current, kp_current, new, kp_new, good_matches, None,
+        #                             matchColor=(0, 255, 0),
+        #                             singlePointColor=(255, 0, 0),
+        #                             flags=cv.DrawMatchesFlags_NOT_DRAW_SINGLE_POINTS)
+        #cv.imshow("Matches", cv.resize(img_matches, (1280, 720)))
+        #cv.waitKey(0)
+        #########################################################################
+
+        src_points = np.float32([kp_new[m.trainIdx].pt for m in good_matches])
+        dest_points = np.float32([kp_current[m.queryIdx].pt for m in good_matches])
+
+        homography = cv.findHomography(src_points, dest_points, cv.RANSAC, 5.0)[0]
+        warped = cv.warpPerspective(new, homography, canvas_size)
+
+        mask1 = (current != 0).any(axis=2)
+        mask2 = (warped != 0).any(axis=2)
+        overlap = mask1 & mask2
+        current[~mask1] = warped[~mask1]
+        current[overlap] = cv.addWeighted(current[overlap], 0.5, warped[overlap], 0.5, 0)
+
+        cv.imshow("stitched", cv.resize(current, (1280, 720)))
+        cv.waitKey(0)
+
+    # Final crop to content
+    y_nonzero, x_nonzero = np.nonzero(current.any(axis=2))
+    y_min, y_max = y_nonzero.min(), y_nonzero.max()
+    x_min, x_max = x_nonzero.min(), x_nonzero.max()
+    return current[y_min:y_max, x_min:x_max]
 
 # TODO
 def detect_lines(frame):
@@ -134,8 +260,10 @@ def main():
             frames[i] = cv.remap(frame, x_matrices[i], y_matrices[i], cv.INTER_LINEAR)  # Not sure what best interp is
 
         # Stitch frame into birds eye image
-        frame = birds_eye_view(frames, matrix)
-
+        frame = birds_eye_view(frames)
+        cv.imwrite("stitched_new.png", frame)
+        cv.imshow("birds_eye", cv.resize(frame, (IMAGE_WIDTH, IMAGE_HEIGHT)))
+        cv.waitKey(0)
         # Extract corners from birds eye image
         corners = detect_lines(frame)
 
